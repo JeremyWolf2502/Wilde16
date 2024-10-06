@@ -1,16 +1,10 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
-const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-
-// Initialisiere Socket.io mit Polling-Transport für Vercel
-const io = socketIo(server, {
-    transports: ['polling'],  // Polling anstelle von WebSockets erzwingen
-    allowEIO3: true  // Unterstützung für ältere Socket.io-Versionen (falls benötigt)
-});
+const io = socketIo(server);
 
 let players = [];
 let currentTurnIndex = 0;
@@ -20,12 +14,9 @@ let roundActive = false;
 let currentGameActive = true; // Variable für laufendes Spiel
 let gameStats = {}; // Statistiken für gewonnene und verlorene Spiele
 
-// Route für die Hauptseite ("/"), um index.html zu laden
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html')); // Achte darauf, dass index.html im Root-Verzeichnis liegt
-});
+app.use(express.static(__dirname + '/public'));
 
-// Socket.io-Logik für Spieler
+// Neuer Spieler tritt bei
 io.on('connection', (socket) => {
     console.log('Ein Spieler hat sich verbunden:', socket.id);
 
@@ -54,31 +45,33 @@ io.on('connection', (socket) => {
     });
 
     // Spieler würfelt sein Leben aus
-    socket.on('determineLife', () => {
-        if (lifeDeterminationPhase) {
-            const player = players.find(p => p.id === socket.id);
-            if (player && player.life === 0) {
-                const lifeRoll = Math.floor(Math.random() * 6) + 1;
-                player.life = lifeRoll;
-                io.emit('logMessage', `${player.name} hat ${lifeRoll} Leben gewürfelt.`);
-                io.emit('updatePlayers', players);
+socket.on('determineLife', () => {
+    if (lifeDeterminationPhase) {
+        const player = players.find(p => p.id === socket.id);
+        if (player && player.life === 0) {
+            const lifeRoll = Math.floor(Math.random() * 6) + 1;
+            player.life = lifeRoll;
+            io.emit('logMessage', `${player.name} hat ${lifeRoll} Leben gewürfelt.`);
+            io.emit('updatePlayers', players);
 
-                // Prüfen, ob alle Spieler ihre Leben gewürfelt haben
-                if (players.every(p => p.life > 0)) {
-                    lifeDeterminationPhase = false;  // Lebensauswürfphase beenden
-                    roundActive = true;  // Das Spiel wird aktiv
+            // Prüfen, ob alle Spieler ihre Leben gewürfelt haben
+            if (players.every(p => p.life > 0)) {
+                lifeDeterminationPhase = false;  // Lebensauswürfphase beenden
+                roundActive = true;  // Das Spiel wird aktiv
+                
+                // Spieler nach Leben sortieren, der mit den wenigsten Leben beginnt
+                players.sort((a, b) => a.life - b.life);
+                currentTurnIndex = 0;  // Der Spieler mit den wenigsten Leben fängt an
+                players[currentTurnIndex].isTurn = true;
 
-                    // Spieler nach Leben sortieren, der mit den wenigsten Leben beginnt
-                    players.sort((a, b) => a.life - b.life);
-                    currentTurnIndex = 0;  // Der Spieler mit den wenigsten Leben fängt an
-                    players[currentTurnIndex].isTurn = true;
-
-                    io.emit('logMessage', `${players[0].name} beginnt das Spiel mit den wenigsten Leben.`);
-                    io.emit('updatePlayers', players);  // Spieleranzeige aktualisieren
-                }
+                io.emit('logMessage', `${players[0].name} beginnt das Spiel mit den wenigsten Leben.`);
+                io.emit('updatePlayers', players);  // Spieleranzeige aktualisieren
             }
         }
-    });
+    }
+});
+
+
 
     // Spieler würfelt während des Spiels
     socket.on('rollDice', () => {
@@ -182,8 +175,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// Server auf Port 3000 oder den von Vercel festgelegten Port starten
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Server läuft auf Port ${PORT}`);
+server.listen(3000, () => {
+    console.log('Server läuft auf Port 3000');
 });
