@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
+const path = require('path'); // Wir verwenden path, um sicherzustellen, dass die Pfade korrekt sind
 
 const app = express();
 const server = http.createServer(app);
@@ -14,7 +15,10 @@ let roundActive = false;
 let currentGameActive = true; // Variable für laufendes Spiel
 let gameStats = {}; // Statistiken für gewonnene und verlorene Spiele
 
-app.use(express.static(__dirname + '/public'));
+// Stelle sicher, dass die index.html-Datei bereitgestellt wird, wenn jemand die Hauptseite besucht
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html')); // Stelle sicher, dass sich die index.html im Root-Verzeichnis befindet
+});
 
 // Neuer Spieler tritt bei
 io.on('connection', (socket) => {
@@ -45,35 +49,33 @@ io.on('connection', (socket) => {
     });
 
     // Spieler würfelt sein Leben aus
-socket.on('determineLife', () => {
-    if (lifeDeterminationPhase) {
-        const player = players.find(p => p.id === socket.id);
-        if (player && player.life === 0) {
-            const lifeRoll = Math.floor(Math.random() * 6) + 1;
-            player.life = lifeRoll;
-            io.emit('logMessage', `${player.name} hat ${lifeRoll} Leben gewürfelt.`);
-            io.emit('updatePlayers', players);
+    socket.on('determineLife', () => {
+        if (lifeDeterminationPhase) {
+            const player = players.find(p => p.id === socket.id);
+            if (player && player.life === 0) {
+                const lifeRoll = Math.floor(Math.random() * 6) + 1;
+                player.life = lifeRoll;
+                io.emit('logMessage', `${player.name} hat ${lifeRoll} Leben gewürfelt.`);
+                io.emit('updatePlayers', players);
 
-            // Prüfen, ob alle Spieler ihre Leben gewürfelt haben
-            if (players.every(p => p.life > 0)) {
-                lifeDeterminationPhase = false;  // Lebensauswürfphase beenden
-                roundActive = true;  // Das Spiel wird aktiv
-                
-                // Spieler nach Leben sortieren, der mit den wenigsten Leben beginnt
-                players.sort((a, b) => a.life - b.life);
-                currentTurnIndex = 0;  // Der Spieler mit den wenigsten Leben fängt an
-                players[currentTurnIndex].isTurn = true;
+                // Prüfen, ob alle Spieler ihre Leben gewürfelt haben
+                if (players.every(p => p.life > 0)) {
+                    lifeDeterminationPhase = false;  // Lebensauswürfphase beenden
+                    roundActive = true;  // Das Spiel wird aktiv
 
-                io.emit('logMessage', `${players[0].name} beginnt das Spiel mit den wenigsten Leben.`);
-                io.emit('updatePlayers', players);  // Spieleranzeige aktualisieren
+                    // Spieler nach Leben sortieren, der mit den wenigsten Leben beginnt
+                    players.sort((a, b) => a.life - b.life);
+                    currentTurnIndex = 0;  // Der Spieler mit den wenigsten Leben fängt an
+                    players[currentTurnIndex].isTurn = true;
+
+                    io.emit('logMessage', `${players[0].name} beginnt das Spiel mit den wenigsten Leben.`);
+                    io.emit('updatePlayers', players);  // Spieleranzeige aktualisieren
+                }
             }
         }
-    }
-});
+    });
 
-
-
-    // Spieler würfelt während des Spiels
+    // Spieler würfelt während des Spiels (restlicher Code bleibt wie gehabt)...
     socket.on('rollDice', () => {
         const player = players[currentTurnIndex];
         if (player && player.id === socket.id && roundActive && !player.eliminated) {
@@ -175,6 +177,8 @@ socket.on('determineLife', () => {
     });
 });
 
-server.listen(3000, () => {
-    console.log('Server läuft auf Port 3000');
+// Server auf Port 3000 oder den von Replit festgelegten Port starten
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Server läuft auf Port ${PORT}`);
 });
