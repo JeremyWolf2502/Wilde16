@@ -1,22 +1,31 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
+const path = require('path'); // Für den Pfad zur HTML-Datei
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+
+// Initialisiere Socket.io mit Polling
+const io = socketIo(server, {
+  transports: ['polling'],  // Polling anstelle von WebSockets
+  allowEIO3: true  // Unterstützung für alte Clients, falls benötigt
+});
 
 let players = [];
 let currentTurnIndex = 0;
 let totalValue = 0;
 let lifeDeterminationPhase = true;
 let roundActive = false;
-let currentGameActive = true; // Variable für laufendes Spiel
-let gameStats = {}; // Statistiken für gewonnene und verlorene Spiele
+let currentGameActive = true;
+let gameStats = {};
 
-app.use(express.static(__dirname + '/public'));
+// Route für die Hauptseite ("/"), um index.html zu laden
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
-// Neuer Spieler tritt bei
+// Spieler beitreten lassen und Spiel-Logik
 io.on('connection', (socket) => {
     console.log('Ein Spieler hat sich verbunden:', socket.id);
 
@@ -38,42 +47,40 @@ io.on('connection', (socket) => {
                 io.emit('logMessage', `${playerName} kann erst beim nächsten Spiel mitspielen.`);
             }
 
-            gameStats[playerName] = { wins: 0, losses: 0 };  // Initialisiere Statistiken für neuen Spieler
-            io.emit('updateGameStats', gameStats);  // Statistiken an alle Spieler senden
-            io.emit('updatePlayers', players);  // Spieleranzeige updaten
+            gameStats[playerName] = { wins: 0, losses: 0 };
+            io.emit('updateGameStats', gameStats);
+            io.emit('updatePlayers', players);
         }
     });
 
     // Spieler würfelt sein Leben aus
-socket.on('determineLife', () => {
-    if (lifeDeterminationPhase) {
-        const player = players.find(p => p.id === socket.id);
-        if (player && player.life === 0) {
-            const lifeRoll = Math.floor(Math.random() * 6) + 1;
-            player.life = lifeRoll;
-            io.emit('logMessage', `${player.name} hat ${lifeRoll} Leben gewürfelt.`);
-            io.emit('updatePlayers', players);
+    socket.on('determineLife', () => {
+        if (lifeDeterminationPhase) {
+            const player = players.find(p => p.id === socket.id);
+            if (player && player.life === 0) {
+                const lifeRoll = Math.floor(Math.random() * 6) + 1;
+                player.life = lifeRoll;
+                io.emit('logMessage', `${player.name} hat ${lifeRoll} Leben gewürfelt.`);
+                io.emit('updatePlayers', players);
 
-            // Prüfen, ob alle Spieler ihre Leben gewürfelt haben
-            if (players.every(p => p.life > 0)) {
-                lifeDeterminationPhase = false;  // Lebensauswürfphase beenden
-                roundActive = true;  // Das Spiel wird aktiv
-                
-                // Spieler nach Leben sortieren, der mit den wenigsten Leben beginnt
-                players.sort((a, b) => a.life - b.life);
-                currentTurnIndex = 0;  // Der Spieler mit den wenigsten Leben fängt an
-                players[currentTurnIndex].isTurn = true;
+                // Prüfen, ob alle Spieler ihre Leben gewürfelt haben
+                if (players.every(p => p.life > 0)) {
+                    lifeDeterminationPhase = false;  // Lebensauswürfphase beenden
+                    roundActive = true;  // Das Spiel wird aktiv
 
-                io.emit('logMessage', `${players[0].name} beginnt das Spiel mit den wenigsten Leben.`);
-                io.emit('updatePlayers', players);  // Spieleranzeige aktualisieren
+                    // Spieler nach Leben sortieren, der mit den wenigsten Leben beginnt
+                    players.sort((a, b) => a.life - b.life);
+                    currentTurnIndex = 0;  // Der Spieler mit den wenigsten Leben fängt an
+                    players[currentTurnIndex].isTurn = true;
+
+                    io.emit('logMessage', `${players[0].name} beginnt das Spiel mit den wenigsten Leben.`);
+                    io.emit('updatePlayers', players);  // Spieleranzeige aktualisieren
+                }
             }
         }
-    }
-});
+    });
 
-
-
-    // Spieler würfelt während des Spiels
+    // Spieler würfelt während des Spiels (restlicher Code bleibt wie gehabt)...
     socket.on('rollDice', () => {
         const player = players[currentTurnIndex];
         if (player && player.id === socket.id && roundActive && !player.eliminated) {
@@ -175,6 +182,8 @@ socket.on('determineLife', () => {
     });
 });
 
-server.listen(3000, () => {
-    console.log('Server läuft auf Port 3000');
+// Port für Vercel oder lokalen Gebrauch
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Server läuft auf Port ${PORT}`);
 });
