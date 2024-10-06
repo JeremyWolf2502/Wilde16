@@ -1,15 +1,15 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
-const path = require('path'); // Für den Pfad zur HTML-Datei
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 
-// Initialisiere Socket.io mit Polling
+// Initialisiere Socket.io mit Polling-Transport für Vercel
 const io = socketIo(server, {
-  transports: ['polling'],  // Polling anstelle von WebSockets
-  allowEIO3: true  // Unterstützung für alte Clients, falls benötigt
+    transports: ['polling'],  // Polling anstelle von WebSockets erzwingen
+    allowEIO3: true  // Unterstützung für ältere Socket.io-Versionen (falls benötigt)
 });
 
 let players = [];
@@ -17,15 +17,15 @@ let currentTurnIndex = 0;
 let totalValue = 0;
 let lifeDeterminationPhase = true;
 let roundActive = false;
-let currentGameActive = true;
-let gameStats = {};
+let currentGameActive = true; // Variable für laufendes Spiel
+let gameStats = {}; // Statistiken für gewonnene und verlorene Spiele
 
 // Route für die Hauptseite ("/"), um index.html zu laden
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html')); // Achte darauf, dass index.html im Root-Verzeichnis liegt
 });
 
-// Spieler beitreten lassen und Spiel-Logik
+// Socket.io-Logik für Spieler
 io.on('connection', (socket) => {
     console.log('Ein Spieler hat sich verbunden:', socket.id);
 
@@ -47,9 +47,9 @@ io.on('connection', (socket) => {
                 io.emit('logMessage', `${playerName} kann erst beim nächsten Spiel mitspielen.`);
             }
 
-            gameStats[playerName] = { wins: 0, losses: 0 };
-            io.emit('updateGameStats', gameStats);
-            io.emit('updatePlayers', players);
+            gameStats[playerName] = { wins: 0, losses: 0 };  // Initialisiere Statistiken für neuen Spieler
+            io.emit('updateGameStats', gameStats);  // Statistiken an alle Spieler senden
+            io.emit('updatePlayers', players);  // Spieleranzeige updaten
         }
     });
 
@@ -80,7 +80,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Spieler würfelt während des Spiels (restlicher Code bleibt wie gehabt)...
+    // Spieler würfelt während des Spiels
     socket.on('rollDice', () => {
         const player = players[currentTurnIndex];
         if (player && player.id === socket.id && roundActive && !player.eliminated) {
@@ -182,7 +182,7 @@ io.on('connection', (socket) => {
     });
 });
 
-// Port für Vercel oder lokalen Gebrauch
+// Server auf Port 3000 oder den von Vercel festgelegten Port starten
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server läuft auf Port ${PORT}`);
