@@ -6,10 +6,10 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
-// Initialisiere Socket.io mit Long Polling und WebSocket-Fallback
+// Initialisiere Socket.io mit Polling und WebSocket-Fallback
 const io = socketIo(server, {
     transports: ['polling', 'websocket'],  // WebSocket als Fallback, falls möglich
-    allowEIO3: true  // Unterstützung für ältere Socket.io-Versionen (falls benötigt)
+    allowEIO3: true  // Unterstützung für ältere Socket.io-Versionen
 });
 
 let players = [];
@@ -28,7 +28,7 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Spieler beitreten lassen und Spiel-Logik
+// Socket.io-Verbindung für Spieler
 io.on('connection', (socket) => {
     console.log('Ein Spieler hat sich verbunden:', socket.id);
 
@@ -50,9 +50,9 @@ io.on('connection', (socket) => {
                 io.emit('logMessage', `${playerName} kann erst beim nächsten Spiel mitspielen.`);
             }
 
-            gameStats[playerName] = { wins: 0, losses: 0 };  // Initialisiere Statistiken für neuen Spieler
-            io.emit('updateGameStats', gameStats);  // Statistiken an alle Spieler senden
-            io.emit('updatePlayers', players);  // Spieleranzeige updaten
+            gameStats[playerName] = { wins: 0, losses: 0 };
+            io.emit('updateGameStats', gameStats);
+            io.emit('updatePlayers', players);
         }
     });
 
@@ -66,18 +66,16 @@ io.on('connection', (socket) => {
                 io.emit('logMessage', `${player.name} hat ${lifeRoll} Leben gewürfelt.`);
                 io.emit('updatePlayers', players);
 
-                // Prüfen, ob alle Spieler ihre Leben gewürfelt haben
                 if (players.every(p => p.life > 0)) {
-                    lifeDeterminationPhase = false;  // Lebensauswürfphase beenden
-                    roundActive = true;  // Das Spiel wird aktiv
+                    lifeDeterminationPhase = false;
+                    roundActive = true;
 
                     // Spieler nach Leben sortieren, der mit den wenigsten Leben beginnt
                     players.sort((a, b) => a.life - b.life);
-                    currentTurnIndex = 0;  // Der Spieler mit den wenigsten Leben fängt an
+                    currentTurnIndex = 0;
                     players[currentTurnIndex].isTurn = true;
-
                     io.emit('logMessage', `${players[0].name} beginnt das Spiel mit den wenigsten Leben.`);
-                    io.emit('updatePlayers', players);  // Spieleranzeige aktualisieren
+                    io.emit('updatePlayers', players);
                 }
             }
         }
@@ -111,7 +109,7 @@ io.on('connection', (socket) => {
                 io.emit('playerEliminated', player.name);
                 io.emit('logMessage', `${player.name} ist ausgeschieden.`);
                 player.eliminated = true;
-                gameStats[player.name].losses++;  // Zähle Verlust für diesen Spieler
+                gameStats[player.name].losses++;
                 players.splice(currentTurnIndex, 1);
                 totalValue = 0;
 
@@ -123,9 +121,9 @@ io.on('connection', (socket) => {
                     io.emit('updatePlayers', players);
                 } else {
                     io.emit('gameOver', players[0].name);
-                    gameStats[players[0].name].wins++;  // Zähle Sieg für den verbleibenden Spieler
-                    roundActive = false;  // Beende das aktuelle Spiel
-                    io.emit('updateGameStats', gameStats);  // Statistiken aktualisieren
+                    gameStats[players[0].name].wins++;
+                    roundActive = false;
+                    io.emit('updateGameStats', gameStats);
                 }
             } else {
                 currentTurnIndex = (currentTurnIndex + 1) % players.length;
@@ -141,15 +139,15 @@ io.on('connection', (socket) => {
     socket.on('sacrificeLife', () => {
         const player = players[currentTurnIndex];
         if (player && player.id === socket.id && roundActive && !player.eliminated) {
-            if (player.life > 1) {  // Spieler darf kein Leben opfern, wenn er nur noch 1 Leben hat
+            if (player.life > 1) {
                 player.life--;
-                totalValue = 0;  // Der Gesamtwert wird auf 0 zurückgesetzt
+                totalValue = 0;
                 io.emit('lifeSacrificed', {
                     player: player.name,
                     life: player.life
                 });
                 io.emit('logMessage', `${player.name} hat ein Leben geopfert und startet bei 0. Verbleibende Leben: ${player.life}`);
-                io.emit('updatePlayers', players);  // Spieleranzeige aktualisieren
+                io.emit('updatePlayers', players);
             } else {
                 io.emit('logMessage', `${player.name} kann kein Leben mehr opfern, da er nur noch 1 Leben hat.`);
             }
@@ -170,7 +168,7 @@ io.on('connection', (socket) => {
         lifeDeterminationPhase = true;
         roundActive = false;
 
-        io.emit('resetGame');  // Spiel wird zurückgesetzt
+        io.emit('resetGame');
         io.emit('logMessage', "Das Spiel wurde zurückgesetzt. Ein neues Spiel beginnt.");
     });
 
@@ -185,7 +183,7 @@ io.on('connection', (socket) => {
     });
 });
 
-// Server auf Port 3000 oder den von Vercel festgelegten Port starten
+// Server auf Port 3000 oder den von Render festgelegten Port starten
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server läuft auf Port ${PORT}`);
